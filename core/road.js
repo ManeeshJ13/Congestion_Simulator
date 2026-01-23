@@ -1,16 +1,22 @@
 //configuration
 const road_length = 10; //no of slots
 const total_ticks = 30; //how long to run
-const arrival_every = 1; //entry rate of cars
+const arrival_every = 10; //entry rate of cars
 
 //state
-let road = new Array(road_length).fill(0);
+let road = new Array(road_length).fill(null);
 let tick = 0;
-let carsExited = 0;
+let nextCarId = 1;
 
-//printing the road
+//metrics
+let carsExited = 0;
+let totalTimeInSystem = 0;
+
+//print road
 function printRoad() {
-    const visual = road.map(cell => (cell===1 ? "C":".")).join(" ");
+    const visual = road
+    .map(cell => (cell? "C" : "."))
+    .join(" ");
     console.log(`Tick ${tick}:${visual}`);
 }
 
@@ -19,32 +25,37 @@ function step() {
     tick++;
 
     //move cars forward
-    for (let i = road_length-1; i>=0; i--) {
-        if (road[i] === 1 && road[i+1] === 0) {
-            road[i+1] = 1;
-            road[i] = 0;
-        } 
-    }
-
-    //remove the car at end
-    if (road[road_length-1] === 1) {
-        road[road_length - 1] = 0;
-        carsExited++;
-    }
-
-    //add new car at start
-    if (tick % arrival_every === 0) {
-        if (road[0] === 0) {
-            road[0] = 1;
+    for (let i = road_length - 2; i >= 0 ; i--) {
+        if (road[i] && road[i+1] === null) {
+            road[i+1] = road[i];
+            road[i] = null;
         }
     }
 
-    //current state
+    //remove car at end
+    const lastIndex = road_length - 1;
+    if (road[lastIndex]) {
+        const car = road[lastIndex];
+        road[lastIndex] = null;
+
+        carsExited++;
+        totalTimeInSystem += (tick - car.spawnTick);
+    }
+
+    //add new car to start
+    if (tick % arrival_every === 0) {
+        if (road[0] === null) {
+            road[0] = {
+                id: nextCarId++,
+                spawnTick:tick
+            };
+        }
+    }
+
     printRoad();
 }
 
-
-//running the simulation
+//run simulation
 console.log("Starting simulation");
 printRoad();
 
@@ -54,3 +65,11 @@ for (let i = 0; i < total_ticks; i++) {
 
 console.log("Simulation ended");
 console.log("Cars exited:", carsExited);
+
+if (carsExited > 0) {
+    console.log (
+        "Average time in system:",
+        (totalTimeInSystem/carsExited).toFixed(2), "ticks"
+    );
+}
+
