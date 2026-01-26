@@ -1,7 +1,14 @@
 //configuration
 const road_length = 10; //no of slots
 const total_ticks = 30; //how long to run
-const arrival_every = 10; //entry rate of cars
+const arrival_every = 2; //entry rate of cars
+const bottleneck_pos = 5; //index of bottleneck
+const bottleneck_rate = 5; //allows 1 car every 5 tick
+let bottleneckTimer = 0;
+//queue of the amount of objects before the bottleneck
+//length shows the amt of congestion 
+let queueLengthSum = 0;
+let maxQueueLength = 0;
 
 //state
 let road = new Array(road_length).fill(null);
@@ -12,48 +19,81 @@ let nextCarId = 1;
 let carsExited = 0;
 let totalTimeInSystem = 0;
 
+
 //print road
 function printRoad() {
-    const visual = road
-    .map(cell => (cell? "C" : "."))
-    .join(" ");
-    console.log(`Tick ${tick}:${visual}`);
+    let output = road.map((cell, idx) => {
+        if (idx === bottleneck_pos) return cell ? "X":"|";
+        return cell ? "C":".";
+    }).join(" ");
+
+    console.log(`Tick ${tick}:${output}`);
 }
 
 //one simulation step
 function step() {
     tick++;
+    bottleneckTimer++;
 
-    //move cars forward
-    for (let i = road_length - 2; i >= 0 ; i--) {
-        if (road[i] && road[i+1] === null) {
-            road[i+1] = road[i];
-            road[i] = null;
+    const newRoad = new Array(road_length).fill(null);
+
+    for(let i = road_length-1; i >= 0; i--) {
+        const car = road[i];
+        if(!car) continue;
+
+        //exit condition
+        if (i === road_length-1) {
+            carsExited++;
+            totalTimeInSystem += (tick - car.spawnTick);
+            continue;
+        }
+
+        //bottleneck
+        if (i === bottleneck_pos) {
+            if (bottleneckTimer >= bottleneck_rate && road[i+1] === null) {
+                newRoad[i+1] = car;
+                bottleneckTimer = 0;
+            }
+            else {
+                newRoad[i] = car;
+            }
+            continue;
+        }
+
+
+        //normal movement
+        if (road[i+1] === null) {
+            newRoad[i+1] = car;
+        }
+        else {
+            newRoad[i] = car;
         }
     }
 
-    //remove car at end
-    const lastIndex = road_length - 1;
-    if (road[lastIndex]) {
-        const car = road[lastIndex];
-        road[lastIndex] = null;
-
-        carsExited++;
-        totalTimeInSystem += (tick - car.spawnTick);
+    //spawn new car
+    if (tick % arrival_every === 0 && newRoad[0] === null) {
+        newRoad[0] = {
+            id: nextCarId++,
+            spawnTick: tick
+        };
     }
 
-    //add new car to start
-    if (tick % arrival_every === 0) {
-        if (road[0] === null) {
-            road[0] = {
-                id: nextCarId++,
-                spawnTick:tick
-            };
-        }
+    //measure queue length
+    let queueLength = 0;
+    for (let i = 0; i < bottleneck_pos; i++) {
+        if (road[i] != null) queueLength++;
     }
 
+    queueLengthSum += queueLength;
+    maxQueueLength = Math.max(maxQueueLength, queueLength);
+
+    console.log(`Queue Length :${queueLength}`);
+
+    road = newRoad;
     printRoad();
 }
+
+
 
 //run simulation
 console.log("Starting simulation");
@@ -66,10 +106,15 @@ for (let i = 0; i < total_ticks; i++) {
 console.log("Simulation ended");
 console.log("Cars exited:", carsExited);
 
+console.log("Max queue length:", maxQueueLength);
+console.log(
+    "Average queue length:",
+    (queueLengthSum / total_ticks).toFixed(2)
+);
+
 if (carsExited > 0) {
     console.log (
         "Average time in system:",
         (totalTimeInSystem/carsExited).toFixed(2), "ticks"
     );
 }
-
